@@ -1,0 +1,94 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #0e1512;
+  --color-ink-2: #131c18;
+  --color-ink-3: #1a2520;
+  --color-line: #2b3a33;
+  --color-paper: #e8dcc4;
+  --color-paper-dim: #b0a792;
+  --color-paper-faint: #8e8878;
+  --color-moss: #9db585;
+  --color-apricot: #e9a86b;
+  --color-rose: #d49a9a;
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::selection {
+  background: rgba(233, 168, 107, 0.35);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-apricot);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.panel {
+  background: rgba(19, 28, 24, 0.86);
+  border: 1px solid var(--color-line);
+  backdrop-filter: blur(6px);
+}
+
+/* Fade chrome in and out for focus mode. */
+.chrome {
+  transition:
+    opacity 600ms ease,
+    transform 600ms ease;
+}
+.chrome[data-hidden='true'] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.breathe {
+  animation: breathe 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chrome {
+    transition: opacity 200ms linear;
+    transform: none !important;
+  }
+  .breathe {
+    animation: none;
+  }
+}
+
+/* Scrollbar in the drawer. */
+.scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
