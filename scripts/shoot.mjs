@@ -66,6 +66,8 @@ const send = (method, params = {}) =>
 await send('Runtime.enable');
 await send('Page.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: +w, height: +h, deviceScaleFactor: 1, mobile: +w < 700 });
+// Narrow viewports also emulate a touch screen, so (hover: none) and (pointer: coarse) match like on a phone.
+if (+w < 700) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
 await send('Page.navigate', { url });
 await sleep(2500);
 

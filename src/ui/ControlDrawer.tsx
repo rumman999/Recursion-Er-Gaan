@@ -23,6 +23,18 @@ function Group({ title, children, note }: { title: string; children: ReactNode; 
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
+function PhoneSpeakerSwitch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="py-2">
+      <Switch label="Phone speaker" checked={on} onChange={onChange} />
+      <p className="mt-1 text-[11.5px] leading-snug text-paper-faint">
+        Phone speakers can't play the low drone, so this adds its overtones and cuts the deep bass. On by default on
+        phones. Turn it off with headphones. Downloads always use the full mix.
+      </p>
+    </div>
+  );
+}
+
 function SeedField() {
   const seed = useStore((s) => s.grow.seed);
   const setGrow = useStore((s) => s.setGrow);
@@ -77,6 +89,8 @@ export function ControlDrawer() {
   const endless = useStore((s) => s.endless);
   const setEndless = useStore((s) => s.setEndless);
   const sleep = useStore((s) => s.sleep);
+  const smallSpeaker = useStore((s) => s.smallSpeaker);
+  const setSmallSpeaker = useStore((s) => s.setSmallSpeaker);
   const setSleep = useStore((s) => s.setSleep);
 
   const match = PRESETS.find(
@@ -108,6 +122,7 @@ export function ControlDrawer() {
         {/* On small screens the transport bar has no room for these. */}
         <div className="md:hidden">
           <Group title="Playback">
+            <PhoneSpeakerSwitch on={smallSpeaker} onChange={setSmallSpeaker} />
             <div className="py-2">
               <Switch label="Endless: grow a new plant when this one finishes" checked={endless} onChange={setEndless} />
             </div>
@@ -232,6 +247,9 @@ export function ControlDrawer() {
         </Group>
 
         <Group title="Mix">
+          <div className="hidden md:block">
+            <PhoneSpeakerSwitch on={smallSpeaker} onChange={setSmallSpeaker} />
+          </div>
           <Slider label="Roots" value={mix.roots} min={0} max={1} step={0.01} format={pct} onChange={(roots) => setMix({ roots })} />
           <Slider label="Melody" value={mix.melody} min={0} max={1} step={0.01} format={pct} onChange={(melody) => setMix({ melody })} />
           <Slider label="Leaves" value={mix.chimes} min={0} max={1} step={0.01} format={pct} onChange={(chimes) => setMix({ chimes })} />

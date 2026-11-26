@@ -21,6 +21,8 @@ interface State {
   sleep: number;
   sleepEndsAt: number | null;
   focus: boolean;
+  /** Phone-speaker mode: on by default on touch devices, remembered per browser. */
+  smallSpeaker: boolean;
   drawerOpen: boolean;
   exportOpen: boolean;
   helpOpen: boolean;
@@ -40,6 +42,7 @@ interface State {
   setEndless: (on: boolean) => void;
   setSleep: (minutes: number) => void;
   setFocus: (on: boolean) => void;
+  setSmallSpeaker: (on: boolean) => void;
   setDrawer: (open: boolean) => void;
   setExportOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
@@ -55,6 +58,20 @@ const defaults = {
 const fromUrl = readHash();
 const initialGrow = { ...defaults.grow, ...fromUrl.grow };
 const initialSound = { ...defaults.sound, ...fromUrl.sound };
+
+const SMALL_SPEAKER_KEY = 'reg.smallSpeaker';
+
+/** Touch devices usually play through a phone speaker; desktops through headphones or proper speakers. */
+function initialSmallSpeaker(): boolean {
+  try {
+    const saved = localStorage.getItem(SMALL_SPEAKER_KEY);
+    if (saved === '1' || saved === '0') return saved === '1';
+  } catch {
+    // Storage can be blocked; fall back to the device guess.
+  }
+  return typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+}
+player.smallSpeaker = initialSmallSpeaker();
 
 const randomSeed = () => 1 + Math.floor(Math.random() * 9999);
 
@@ -92,6 +109,7 @@ export const useStore = create<State>((set, get) => {
     sleep: 0,
     sleepEndsAt: null,
     focus: false,
+    smallSpeaker: player.smallSpeaker,
     drawerOpen: typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
     exportOpen: false,
     helpOpen: false,
@@ -159,6 +177,15 @@ export const useStore = create<State>((set, get) => {
       set({ sleep: minutes, sleepEndsAt: Date.now() + ms, announcement: `Fading out in ${minutes} minutes` });
     },
     setFocus: (focus) => set({ focus }),
+    setSmallSpeaker: (smallSpeaker) => {
+      player.setSmallSpeaker(smallSpeaker);
+      try {
+        localStorage.setItem(SMALL_SPEAKER_KEY, smallSpeaker ? '1' : '0');
+      } catch {
+        // Not remembered, but still applied for this visit.
+      }
+      set({ smallSpeaker, announcement: smallSpeaker ? 'Phone speaker mode on' : 'Phone speaker mode off' });
+    },
     setDrawer: (drawerOpen) => set({ drawerOpen }),
     setExportOpen: (exportOpen) => set({ exportOpen }),
     setHelpOpen: (helpOpen) => set({ helpOpen }),

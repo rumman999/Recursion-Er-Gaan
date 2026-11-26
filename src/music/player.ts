@@ -27,6 +27,8 @@ class Player {
   previous: Placed | null = null;
   /** Called (on the UI thread) when the current composition's recursion has fully returned. */
   onEnd: (() => void) | null = null;
+  /** Phone-speaker path (see SmallSpeaker in engine.ts). Off on desktop. */
+  smallSpeaker = false;
 
   private async ensure(mix: Mix, volume: number): Promise<Graph> {
     await Tone.start();
@@ -36,7 +38,7 @@ class Player {
       this.transport = Tone.getTransport();
       this.ctx = Tone.getContext();
       this.ctx.lookAhead = 0.15;
-      this.pending = Graph.create(mix, volume);
+      this.pending = Graph.create(mix, volume, this.smallSpeaker);
     }
     this.graph = await this.pending;
     return this.graph;
@@ -113,6 +115,24 @@ class Player {
 
   setVolume(v: number) {
     this.graph?.setVolume(v);
+  }
+
+  /** Switch the phone-speaker path, dipping the output for a moment so the re-route can't click. */
+  setSmallSpeaker(on: boolean) {
+    this.smallSpeaker = on;
+    const g = this.graph;
+    if (!g || g.smallSpeaker === on) return;
+    const level = g.master.gain.value;
+    if (level < 0.001) {
+      g.setSmallSpeaker(on);
+      return;
+    }
+    g.master.gain.cancelScheduledValues(Tone.now());
+    g.master.gain.rampTo(0, 0.1);
+    window.setTimeout(() => {
+      g.setSmallSpeaker(on);
+      g.master.gain.rampTo(level, 0.4);
+    }, 130);
   }
 
   private place(comp: Composition, offset: number) {

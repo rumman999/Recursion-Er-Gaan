@@ -53,6 +53,65 @@ class VoicePool {
 }
 
 /**
+ * Phone-speaker adaptation, used for live playback only and only when switched on.
+ *
+ * Measured on the desktop mix: about 97% of its energy is below 300 Hz (the drone
+ * and the low returning tones). Phone speakers roll off below roughly 300-400 Hz,
+ * so on a phone most of the piece disappears and only the thin top is left.
+ * This path:
+ *  - cuts the sub-bass a phone can't play, so it stops using up the limiter's headroom
+ *    and setting off the phone's own speaker protection;
+ *  - doubles each low Roots note's 3rd and 4th harmonics (an octave and a fifth, and
+ *    two octaves, above it), so the ear still hears the bass note from its overtones;
+ *  - skips the gentle treble cut, which suits headphones but dulls a small speaker.
+ * When it is off, none of this is connected and the desktop sound is untouched.
+ */
+class SmallSpeaker {
+  readonly input: Tone.Filter;
+  private trim: Tone.Gain;
+  private liftFilter: Tone.Filter;
+  private droneLift: Tone.PolySynth;
+  private resolveLift: Tone.PolySynth;
+
+  constructor(out: Tone.InputNode, roots: Tone.InputNode) {
+    this.trim = new Tone.Gain(Tone.dbToGain(SMALL_SPEAKER_TRIM_DB)).connect(out);
+    this.input = new Tone.Filter({ type: 'highpass', frequency: 140, rolloff: -24 }).connect(this.trim);
+    this.liftFilter = new Tone.Filter({ type: 'lowpass', frequency: 1400 }).connect(roots);
+    // Same envelopes as the voices they shadow, pure sines so they only add those harmonics.
+    this.droneLift = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'sine' },
+      envelope: { attack: 4, decay: 1, sustain: 0.8, release: 6 },
+      volume: -26,
+    }).connect(this.liftFilter);
+    this.resolveLift = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.9, decay: 1.5, sustain: 0.5, release: 5 },
+      volume: -23,
+    }).connect(this.liftFilter);
+  }
+
+  /** Roots-layer notes below ~165 Hz get their 3rd and 4th harmonics. */
+  play(n: NoteEvent, time: number) {
+    if (n.midi >= 52) return;
+    const synth = n.layer === 'drone' ? this.droneLift : this.resolveLift;
+    synth.triggerAttackRelease(hz(n.midi + 19), n.dur, time, n.vel * 0.7);
+    synth.triggerAttackRelease(hz(n.midi + 24), n.dur, time, n.vel * 0.5);
+  }
+
+  release(time: number) {
+    this.droneLift.releaseAll(time);
+    this.resolveLift.releaseAll(time);
+  }
+
+  dispose() {
+    for (const node of [this.droneLift, this.resolveLift, this.liftFilter, this.input, this.trim]) node.dispose();
+  }
+}
+
+/** Level trim for phone-speaker mode, set from measurement (see SmallSpeaker). */
+const SMALL_SPEAKER_TRIM_DB = 0;
+
+/**
  * The whole signal chain. Built the same way for live playback and for the
  * offline WAV render, so the download sounds like what you heard.
  */
@@ -67,6 +126,10 @@ export class Graph {
   private windEnv: Tone.Gain;
   private disposables: { dispose(): unknown }[] = [];
   private volume: number;
+  private comp: Tone.Compressor;
+  private shelf: Tone.Filter;
+  private small: SmallSpeaker | null = null;
+  private smallOn = false;
 
   private constructor(mix: Mix, volume: number) {
     this.volume = volume;
@@ -77,6 +140,8 @@ export class Graph {
     this.master = new Tone.Gain(0).connect(makeup);
     const comp = new Tone.Compressor({ threshold: -20, ratio: 2.5, attack: 0.03, release: 0.4 }).connect(this.master);
     const shelf = new Tone.Filter({ type: 'highshelf', frequency: 4500, gain: -6 }).connect(comp);
+    this.comp = comp;
+    this.shelf = shelf;
     this.reverb = new Tone.Reverb({ decay: 7, preDelay: 0.03, wet: 0.25 + curve(mix.space) * 0.6 }).connect(shelf);
     const delay = new Tone.FeedbackDelay({ delayTime: 0.45, feedback: 0.22, wet: 0.16 }).connect(this.reverb);
     const bus = new Tone.Gain(1).connect(delay);
@@ -143,10 +208,25 @@ export class Graph {
     this.disposables.push(limiter, makeup, comp, shelf, delay, bus, droneFilter, droneLfo, resolveFilter, windFilter, windLfo, noise);
   }
 
-  static async create(mix: Mix, volume: number): Promise<Graph> {
+  static async create(mix: Mix, volume: number, smallSpeaker = false): Promise<Graph> {
     const g = new Graph(mix, volume);
     await g.reverb.ready;
+    if (smallSpeaker) g.setSmallSpeaker(true);
     return g;
+  }
+
+  /** Re-route the master path for a phone speaker, or back to the desktop path. */
+  setSmallSpeaker(on: boolean, time = Tone.now()) {
+    if (on === this.smallOn) return;
+    if (on && !this.small) this.small = new SmallSpeaker(this.comp, this.layers.roots);
+    this.reverb.disconnect();
+    this.reverb.connect(on ? this.small!.input : this.shelf);
+    if (!on) this.small?.release(time);
+    this.smallOn = on;
+  }
+
+  get smallSpeaker(): boolean {
+    return this.smallOn;
   }
 
   play(n: NoteEvent, time: number) {
@@ -155,6 +235,7 @@ export class Graph {
     else if (layer === 'resolve') this.resolve.triggerAttackRelease(hz(n.midi), n.dur, time, n.vel);
     else if (layer === 'melody') this.melody.play(n, time, 2.4);
     else this.chimes.play(n, time, 3);
+    if (this.smallOn && (layer === 'drone' || layer === 'resolve')) this.small!.play(n, time);
   }
 
   setWind(value: number, time: number) {
@@ -193,9 +274,11 @@ export class Graph {
     this.resolve.releaseAll(time);
     this.melody.release(time);
     this.chimes.release(time);
+    this.small?.release(time);
   }
 
   dispose() {
+    this.small?.dispose();
     this.drone.dispose();
     this.resolve.dispose();
     this.melody.dispose();

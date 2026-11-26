@@ -18,7 +18,13 @@ function layout(comps: Composition[]): { comp: Composition; offset: number }[] {
  * Render offline with the same graph used for live playback.
  * If `seconds` is given, the audio is cut there with a fade-out.
  */
-export async function renderWav(comps: Composition[], mix: Mix, seconds?: number): Promise<Blob> {
+export async function renderWav(
+  comps: Composition[],
+  mix: Mix,
+  seconds?: number,
+  /** Only for measuring phone-speaker mode; downloads always use the full-range mix. */
+  smallSpeaker = false,
+): Promise<Blob> {
   const placed = layout(comps);
   const last = placed[placed.length - 1];
   const natural = last.offset + last.comp.duration;
@@ -32,7 +38,7 @@ export async function renderWav(comps: Composition[], mix: Mix, seconds?: number
   Tone.setContext(ctx);
   let buffer: Tone.ToneAudioBuffer;
   try {
-    const g = await Graph.create(mix, 0.95);
+    const g = await Graph.create(mix, 0.95, smallSpeaker);
     for (const p of placed) scheduleComposition(g, p.comp, ctx.transport, p.offset);
     g.fadeIn(0.6, 0);
     if (seconds && seconds < natural) g.fadeOut(5, total - 5);
