@@ -1,6 +1,6 @@
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import { LoaderCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { compose, formatDuration, type Composition } from '../music/mapping';
 import { KEY_NAMES, MODES } from '../music/scales';
 import { download } from '../export/download';
@@ -74,6 +74,15 @@ export function ExportDialog() {
   const [length, setLength] = useState<Length>('tree');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!busy) return;
+    const t0 = Date.now();
+    setElapsed(0);
+    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [busy]);
 
   const seed = comp.tree.params.seed;
   const name = `recursion-er-gaan-${seed}`;
@@ -137,6 +146,13 @@ export function ExportDialog() {
           </div>
         )}
 
+        {format === 'wav' && (
+          <p className="text-[12px] leading-snug text-paper-faint">
+            Audio renders faster than real time, but a long piece can still take a minute. Playback pauses while it
+            works.
+          </p>
+        )}
+
         {error && (
           <p role="alert" className="text-[13px] text-rose">
             {error}
@@ -152,7 +168,7 @@ export function ExportDialog() {
           {busy ? (
             <>
               <LoaderCircle size={16} className="animate-spin" aria-hidden />
-              <span>{format === 'wav' ? 'Rendering audio, this takes a few seconds' : 'Preparing'}</span>
+              <span className="tabular-nums">{format === 'wav' ? `Rendering audio · ${formatDuration(elapsed)}` : 'Preparing'}</span>
             </>
           ) : (
             `Download ${format === 'wav' ? '.wav' : format === 'midi' ? '.mid' : '.png'}`

@@ -71,10 +71,13 @@ export class Graph {
   private constructor(mix: Mix, volume: number) {
     this.volume = volume;
     const limiter = new Tone.Limiter(-1).toDestination();
-    this.master = new Tone.Gain(0).connect(limiter);
+    // Makeup gain: the layers are mixed with lots of headroom, this brings the
+    // sum up to a normal listening level (peaks near -4 dBFS) before the limiter.
+    const makeup = new Tone.Gain(5).connect(limiter);
+    this.master = new Tone.Gain(0).connect(makeup);
     const comp = new Tone.Compressor({ threshold: -20, ratio: 2.5, attack: 0.03, release: 0.4 }).connect(this.master);
     const shelf = new Tone.Filter({ type: 'highshelf', frequency: 4500, gain: -6 }).connect(comp);
-    this.reverb = new Tone.Reverb({ decay: 9, preDelay: 0.03, wet: 0.25 + curve(mix.space) * 0.6 }).connect(shelf);
+    this.reverb = new Tone.Reverb({ decay: 7, preDelay: 0.03, wet: 0.25 + curve(mix.space) * 0.6 }).connect(shelf);
     const delay = new Tone.FeedbackDelay({ delayTime: 0.45, feedback: 0.22, wet: 0.16 }).connect(this.reverb);
     const bus = new Tone.Gain(1).connect(delay);
 
@@ -104,7 +107,7 @@ export class Graph {
 
     // Melody: soft FM bell, close to a felted marimba.
     this.melody = new VoicePool(
-      8,
+      6,
       () =>
         new Tone.FMSynth({
           harmonicity: 2,
@@ -118,18 +121,15 @@ export class Graph {
       this.layers.melody,
     );
 
-    // Chimes: slightly inharmonic, very short attack, long ring.
+    // Chimes: one oscillator with a few bell-like partials, very short attack, long ring.
+    // (FM voices cost about four times as much to render, and leaves are the most numerous notes.)
     this.chimes = new VoicePool(
-      8,
+      6,
       () =>
-        new Tone.FMSynth({
-          harmonicity: 3.01,
-          modulationIndex: 0.9,
-          oscillator: { type: 'sine' },
-          modulation: { type: 'sine' },
-          envelope: { attack: 0.004, decay: 2.6, sustain: 0, release: 3 },
-          modulationEnvelope: { attack: 0.002, decay: 0.35, sustain: 0, release: 0.5 },
-          volume: -15,
+        new Tone.Synth({
+          oscillator: { type: 'custom', partials: [1, 0, 0.22, 0, 0.08, 0, 0.03] },
+          envelope: { attack: 0.004, decay: 2.4, sustain: 0, release: 2.6 },
+          volume: -13,
         }),
       this.layers.chimes,
     );
@@ -140,7 +140,7 @@ export class Graph {
     const windLfo = new Tone.LFO({ frequency: 0.05, min: 320, max: 1300 }).connect(windFilter.frequency).start();
     const noise = new Tone.Noise({ type: 'pink', volume: -20 }).connect(windFilter).start();
 
-    this.disposables.push(limiter, comp, shelf, delay, bus, droneFilter, droneLfo, resolveFilter, windFilter, windLfo, noise);
+    this.disposables.push(limiter, makeup, comp, shelf, delay, bus, droneFilter, droneLfo, resolveFilter, windFilter, windLfo, noise);
   }
 
   static async create(mix: Mix, volume: number): Promise<Graph> {

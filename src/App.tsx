@@ -84,7 +84,10 @@ function Intro() {
   const play = useStore((s) => s.play);
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[22vh] z-10 flex justify-center px-4">
-      <div className="pointer-events-auto max-w-[30rem] text-center">
+      <div
+        className="pointer-events-auto max-w-[34rem] px-8 py-6 text-center"
+        style={{ background: 'radial-gradient(closest-side, rgba(14,21,18,0.92), rgba(14,21,18,0.75) 60%, rgba(14,21,18,0))' }}
+      >
         <p className="font-display text-[clamp(26px,4.5vw,40px)] leading-[1.15] text-paper">
           A plant that grows by calling itself.
         </p>
@@ -168,6 +171,7 @@ export function App() {
               Recursion Er Gaan
             </h1>
             <p className="mt-1.5 font-mono text-[11.5px] text-paper-faint">seed {seed}</p>
+            {!xwide && <CallStack compact />}
           </div>
           <IconButton label="How it works" shortcut="?" onClick={() => setHelpOpen(true)}>
             <CircleHelp size={18} aria-hidden />

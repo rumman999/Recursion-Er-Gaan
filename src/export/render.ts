@@ -24,13 +24,23 @@ export async function renderWav(comps: Composition[], mix: Mix, seconds?: number
   const natural = last.offset + last.comp.duration;
   const total = seconds ? Math.min(seconds, natural) : natural;
 
-  const buffer = await Tone.Offline(async (ctx) => {
+  // Same as Tone.Offline, except the transport clock runs synchronously. Tone's
+  // async clock waits on setTimeout once per second of audio, and browsers
+  // throttle that, which made a two-minute render take minutes.
+  const live = Tone.getContext();
+  const ctx = new Tone.OfflineContext(2, total, 44100);
+  Tone.setContext(ctx);
+  let buffer: Tone.ToneAudioBuffer;
+  try {
     const g = await Graph.create(mix, 0.95);
     for (const p of placed) scheduleComposition(g, p.comp, ctx.transport, p.offset);
     g.fadeIn(0.6, 0);
     if (seconds && seconds < natural) g.fadeOut(5, total - 5);
     ctx.transport.start(0);
-  }, total, 2, 44100);
+    buffer = await ctx.render(false);
+  } finally {
+    Tone.setContext(live);
+  }
 
   const audio = buffer.get();
   if (!audio) throw new Error('Render produced no audio');

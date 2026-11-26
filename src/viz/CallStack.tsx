@@ -12,7 +12,7 @@ interface Frame {
 
 interface Snapshot {
   frames: Frame[];
-  event: 'enter' | 'leaf' | 'return' | 'idle';
+  event: 'enter' | 'leaf' | 'return' | 'idle' | 'done';
   calls: number;
   total: number;
 }
@@ -51,7 +51,7 @@ function snapshot(comp: Composition, time: number): Snapshot {
   for (let i = 0; i <= idx; i++) if (calls[i].kind === 'enter') entered++;
   return {
     frames: chain.map((x) => frameOf(x, comp.tree.depth)),
-    event: c.kind === 'return' ? 'return' : n.isLeaf ? 'leaf' : 'enter',
+    event: idx === calls.length - 1 ? 'done' : c.kind === 'return' ? 'return' : n.isLeaf ? 'leaf' : 'enter',
     calls: entered,
     total,
   };
@@ -62,10 +62,11 @@ const EVENT_TEXT: Record<Snapshot['event'], string> = {
   leaf: 'base case: a leaf',
   return: 'returning',
   idle: 'waiting',
+  done: 'every call has returned',
 };
 
 /** The live call stack, so you can watch the recursion you are hearing. */
-export function CallStack() {
+export function CallStack({ compact = false }: { compact?: boolean }) {
   const status = useStore((s) => s.status);
   const [snap, setSnap] = useState<Snapshot>({ frames: [], event: 'idle', calls: 0, total: 0 });
 
@@ -91,6 +92,23 @@ export function CallStack() {
   }, []);
 
   const live = status === 'playing' || status === 'paused';
+
+  if (compact) {
+    const top = snap.frames.at(-1);
+    if (!live) return null;
+    return (
+      <p aria-hidden className="mt-1 truncate font-mono text-[11.5px] text-paper-dim">
+        {top ? (
+          <>
+            <span className="text-paper-faint">stack {snap.frames.length} · </span>
+            <span className="text-apricot">grow</span>({top.args})
+          </>
+        ) : (
+          EVENT_TEXT[snap.event]
+        )}
+      </p>
+    );
+  }
   const shown = snap.frames.slice(-9);
   const hidden = snap.frames.length - shown.length;
 

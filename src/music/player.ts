@@ -9,7 +9,7 @@ export interface Placed {
 }
 
 type Transport = ReturnType<typeof Tone.getTransport>;
-type Draw = ReturnType<typeof Tone.getDraw>;
+type Ctx = ReturnType<typeof Tone.getContext>;
 
 /**
  * Live playback. Owns one Graph and the main transport. The visuals read
@@ -19,7 +19,7 @@ class Player {
   private graph: Graph | null = null;
   private pending: Promise<Graph> | null = null;
   private transport: Transport | null = null;
-  private draw: Draw | null = null;
+  private ctx: Ctx | null = null;
   private pauseTimer: number | undefined;
   current: Placed | null = null;
   previous: Placed | null = null;
@@ -32,8 +32,8 @@ class Player {
     if (!this.pending) {
       // Capture the live clock before any offline render can swap the global context.
       this.transport = Tone.getTransport();
-      this.draw = Tone.getDraw();
-      Tone.getContext().lookAhead = 0.15;
+      this.ctx = Tone.getContext();
+      this.ctx.lookAhead = 0.15;
       this.pending = Graph.create(mix, volume);
     }
     this.graph = await this.pending;
@@ -120,10 +120,13 @@ class Player {
     this.current = { comp, offset };
     scheduleComposition(g, comp, tr, offset);
     const placed = this.current;
+    // Transport callbacks run slightly ahead of the audio; wait until the sound actually gets there.
+    // (Tone.Draw would drop this if a frame came late, which happens in background tabs.)
     tr.schedule((t) => {
-      this.draw!.schedule(() => {
+      const delay = Math.max(0, (t - this.ctx!.currentTime) * 1000);
+      window.setTimeout(() => {
         if (this.current === placed) this.onEnd?.();
-      }, t);
+      }, delay);
     }, offset + comp.body);
   }
 }

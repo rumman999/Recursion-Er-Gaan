@@ -1,3 +1,4 @@
+import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import { Shuffle, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { maxDepthFor } from '../recursion/branch';
@@ -8,6 +9,7 @@ import { useStore } from '../state/store';
 import { IconButton } from './controls/IconButton';
 import { Select } from './controls/Select';
 import { Slider } from './controls/Slider';
+import { Switch } from './controls/Switch';
 
 function Group({ title, children, note }: { title: string; children: ReactNode; note?: string }) {
   return (
@@ -72,6 +74,10 @@ export function ControlDrawer() {
   const setMix = useStore((s) => s.setMix);
   const applyPreset = useStore((s) => s.applyPreset);
   const setDrawer = useStore((s) => s.setDrawer);
+  const endless = useStore((s) => s.endless);
+  const setEndless = useStore((s) => s.setEndless);
+  const sleep = useStore((s) => s.sleep);
+  const setSleep = useStore((s) => s.setSleep);
 
   const match = PRESETS.find(
     (p) =>
@@ -99,6 +105,26 @@ export function ControlDrawer() {
       </div>
 
       <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto pb-6">
+        {/* On small screens the transport bar has no room for these. */}
+        <div className="md:hidden">
+          <Group title="Playback">
+            <div className="py-2">
+              <Switch label="Endless: grow a new plant when this one finishes" checked={endless} onChange={setEndless} />
+            </div>
+            <Select
+              label="Sleep timer"
+              value={String(sleep)}
+              onChange={(v) => setSleep(Number(v))}
+              options={[
+                { value: '0', label: 'Off' },
+                { value: '15', label: '15 minutes' },
+                { value: '30', label: '30 minutes' },
+                { value: '60', label: '60 minutes' },
+              ]}
+            />
+          </Group>
+        </div>
+
         <Group title="Start from">
           <Select
             label="Preset"
@@ -126,14 +152,28 @@ export function ControlDrawer() {
                 : 'How many times grow() may call itself.'
             }
           />
-          <Slider
-            label="Branches per call"
-            value={grow.branches}
-            min={2}
-            max={3}
-            step={1}
-            onChange={(b) => setGrow({ branches: b === 3 ? 3 : 2 })}
-          />
+          <div className="py-2">
+            <p id="branches-label" className="mb-1.5 text-[13px] text-paper">
+              Branches per call
+            </p>
+            <ToggleGroup.Root
+              type="single"
+              aria-labelledby="branches-label"
+              value={String(grow.branches)}
+              onValueChange={(v) => v && setGrow({ branches: v === '3' ? 3 : 2 })}
+              className="grid grid-cols-2 gap-1 rounded-lg border border-line bg-ink-2 p-1"
+            >
+              {['2', '3'].map((v) => (
+                <ToggleGroup.Item
+                  key={v}
+                  value={v}
+                  className="h-8 rounded-md font-mono text-[13px] text-paper-dim hover:text-paper data-[state=on]:bg-ink-3 data-[state=on]:text-paper"
+                >
+                  {v}
+                </ToggleGroup.Item>
+              ))}
+            </ToggleGroup.Root>
+          </div>
           <Slider
             label="Spread"
             value={grow.spread}
