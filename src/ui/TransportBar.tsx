@@ -10,6 +10,7 @@ function useSleepLeft(endsAt: number | null): string | null {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!endsAt) return;
+    setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 15_000);
     return () => window.clearInterval(id);
   }, [endsAt]);

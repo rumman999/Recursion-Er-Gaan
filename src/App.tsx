@@ -2,7 +2,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { CircleHelp, Play } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from './state/store';
-import { writeHash } from './state/urlSync';
+import { readHash, writeHash } from './state/urlSync';
 import { ControlDrawer } from './ui/ControlDrawer';
 import { ExportDialog } from './ui/ExportDialog';
 import { HelpDialog } from './ui/HelpDialog';
@@ -72,11 +72,24 @@ function useShortcuts() {
 function useHashSync() {
   useEffect(() => {
     let t: number | undefined;
-    return useStore.subscribe((s, prev) => {
+    const unsub = useStore.subscribe((s, prev) => {
       if (s.grow === prev.grow && s.sound === prev.sound) return;
       window.clearTimeout(t);
       t = window.setTimeout(() => writeHash(s.grow, s.sound), 400);
     });
+    // A shared link pasted into an open tab only changes the hash; apply it.
+    // (writeHash uses replaceState, which doesn't fire this event, so there's no loop.)
+    const onHash = () => {
+      const { grow, sound } = readHash();
+      const s = useStore.getState();
+      s.setGrow(grow);
+      s.setSound(sound);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => {
+      unsub();
+      window.removeEventListener('hashchange', onHash);
+    };
   }, []);
 }
 

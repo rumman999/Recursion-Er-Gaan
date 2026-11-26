@@ -6,6 +6,8 @@ export interface Placed {
   comp: Composition;
   /** Transport seconds where this composition starts. */
   offset: number;
+  /** Set when another plant replaced this one: how far it had grown. */
+  until?: number;
 }
 
 type Transport = ReturnType<typeof Tone.getTransport>;
@@ -116,7 +118,7 @@ class Player {
   private place(comp: Composition, offset: number) {
     const g = this.graph!;
     const tr = this.transport!;
-    this.previous = this.current;
+    this.previous = this.current ? { ...this.current, until: offset } : null;
     this.current = { comp, offset };
     scheduleComposition(g, comp, tr, offset);
     const placed = this.current;

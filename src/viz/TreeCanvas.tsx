@@ -60,7 +60,9 @@ export function TreeCanvas({ insets }: { insets: Insets }) {
         if (prev) {
           const fade = 1 - (now - cur.offset) / 6;
           if (fade > 0) {
-            drawPlant(ctx, prev.comp, fitView(prev.comp, box), { time: null, alpha: fade * 0.9, reducedMotion: true });
+            // Freeze the old plant where it was when it was replaced, so a half-grown plant doesn't pop to full size.
+            const grown = Math.min(now, prev.until ?? Infinity) - prev.offset;
+            drawPlant(ctx, prev.comp, fitView(prev.comp, box), { time: grown, alpha: fade * 0.9, reducedMotion: true });
           }
         }
         drawPlant(ctx, cur.comp, fitView(cur.comp, box), { time: now - cur.offset, alpha: 1, reducedMotion: rm });

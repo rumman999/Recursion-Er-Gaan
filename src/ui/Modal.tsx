@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 interface Props {
   open: boolean;
@@ -12,11 +12,25 @@ interface Props {
 }
 
 export function Modal({ open, onOpenChange, title, description, children, wide }: Props) {
+  // Dialogs open from app state (buttons and shortcuts), not a Radix Trigger,
+  // so remember what had focus and give it back on close.
+  const returnTo = useRef<HTMLElement | null>(null);
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/70" />
         <Dialog.Content
+          onOpenAutoFocus={() => {
+            // Runs just before Radix moves focus into the dialog.
+            returnTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          }}
+          onCloseAutoFocus={(e) => {
+            if (returnTo.current && document.contains(returnTo.current)) {
+              e.preventDefault();
+              returnTo.current.focus();
+            }
+          }}
           className={`panel fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl p-6 shadow-2xl scroll-quiet ${
             wide ? 'max-w-[620px]' : 'max-w-[440px]'
           }`}

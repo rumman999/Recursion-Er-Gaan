@@ -102,7 +102,7 @@ export function ExportDialog() {
         const plants = plantsFor(comp, seconds);
         // The render code (and the MIDI writer) loads only when someone downloads.
         const { renderMidi, renderWav } = await import('../export/render');
-        if (format === 'midi') download(renderMidi(plants), `${name}.mid`);
+        if (format === 'midi') download(renderMidi(plants, seconds ?? undefined), `${name}.mid`);
         else {
           const s = useStore.getState();
           if (s.status === 'playing') s.pause();

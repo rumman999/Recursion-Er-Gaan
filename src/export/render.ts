@@ -54,7 +54,8 @@ const TRACK_NAMES: Record<Layer, string> = {
   chime: 'Leaves (base case)',
 };
 
-export function renderMidi(comps: Composition[]): Blob {
+/** MIDI of the same notes. With `seconds`, notes are cut at the same point as the WAV. */
+export function renderMidi(comps: Composition[], seconds?: number): Blob {
   const midi = new Midi();
   midi.header.setTempo(comps[0].sound.tempo);
   midi.header.name = 'Recursion Er Gaan';
@@ -66,7 +67,10 @@ export function renderMidi(comps: Composition[]): Blob {
   }
   for (const { comp, offset } of layout(comps)) {
     for (const n of comp.notes) {
-      tracks.get(n.layer)!.addNote({ midi: n.midi, time: offset + n.time, duration: n.dur, velocity: n.vel });
+      const time = offset + n.time;
+      if (seconds !== undefined && time >= seconds) continue;
+      const duration = seconds !== undefined ? Math.min(n.dur, seconds - time) : n.dur;
+      tracks.get(n.layer)!.addNote({ midi: n.midi, time, duration, velocity: n.vel });
     }
   }
   return new Blob([midi.toArray() as Uint8Array<ArrayBuffer>], { type: 'audio/midi' });
