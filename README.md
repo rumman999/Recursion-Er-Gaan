@@ -8,7 +8,7 @@ Built solo for **Hub's Quest, Epoch 1: Recursive Soundscapes** (UIU Developers H
 
 ![A fully grown plant from the Lantern bloom preset, with one call path from trunk to leaf highlighted next to its call stack](docs/screenshots/hero.png)
 
-**Live demo:** _add your GitHub Pages link here after the first deploy_
+**Live demo:** [rumman.is-a.dev/UIU_HUBS_QUEST](https://rumman.is-a.dev/UIU_HUBS_QUEST/)
 
 ![The app mid-piece: the plant half grown, the call stack seven calls deep](docs/screenshots/playing.png)
 
