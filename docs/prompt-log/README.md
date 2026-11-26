@@ -8,4 +8,4 @@ The Hub's Quest rules say a project built with AI coding agents must include the
 
 | Session | Prompts |
 |---|---|
-| [session-2026-11-26-e00934c4](session-2026-11-26-e00934c4.md) | 5 |
+| [session-2026-11-26-e00934c4](session-2026-11-26-e00934c4.md) | 6 |

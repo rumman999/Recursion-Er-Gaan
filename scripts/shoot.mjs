@@ -1,6 +1,6 @@
 // Dev helper: drives headless Edge/Chrome over CDP to screenshot the app and catch console errors.
 // Usage: node scripts/shoot.mjs <url> <outDir> [width] [height] [steps-json]
-// Steps: [{"evalFile": "path.js"}, {"eval": "js"}, {"wait": ms}, {"shot": "name"}, {"key": "f"}]
+// Steps: [{"evalFile": "path.js", "saveTo": "out.png"} (saves a returned data: URL),, {"eval": "js"}, {"wait": ms}, {"shot": "name"}, {"key": "f"}]
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -74,7 +74,13 @@ for (const s of steps) {
   if (s.evalFile) s.eval = readFileSync(s.evalFile, 'utf8');
   if (s.eval) {
     const r = await send('Runtime.evaluate', { expression: s.eval, awaitPromise: true, returnByValue: true, userGesture: true });
-    logs.push('[eval] ' + JSON.stringify(r.result?.result?.value ?? r.result?.exceptionDetails?.text ?? null));
+    const value = r.result?.result?.value;
+    if (s.saveTo && typeof value === 'string' && value.startsWith('data:')) {
+      writeFileSync(s.saveTo, Buffer.from(value.split(',')[1], 'base64'));
+      logs.push(`[saved] ${s.saveTo}`);
+    } else {
+      logs.push('[eval] ' + JSON.stringify(value ?? r.result?.exceptionDetails?.exception?.description ?? r.result?.exceptionDetails?.text ?? null));
+    }
   }
   if (s.key) {
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: s.key, text: s.key });

@@ -6,9 +6,11 @@ You shape a recursive function with a few sliders, press play, and listen to it 
 
 Built solo for **Hub's Quest, Epoch 1: Recursive Soundscapes** (UIU Developers Hub).
 
-![The app mid-piece: the plant half grown, the call stack seven calls deep](docs/screenshots/playing.png)
+![A fully grown plant from the Lantern bloom preset, with one call path from trunk to leaf highlighted next to its call stack](docs/screenshots/hero.png)
 
 **Live demo:** _add your GitHub Pages link here after the first deploy_
+
+![The app mid-piece: the plant half grown, the call stack seven calls deep](docs/screenshots/playing.png)
 
 ---
 
