@@ -1,0 +1,160 @@
+#!/usr/bin/env node
+// Turns Claude Code session transcripts into the prompt log the Hub's Quest rules ask for:
+// every prompt as typed, followed by the agent's reply and the actions it took.
+//
+// Usage: node scripts/export-prompt-log.mjs [transcriptDir] [outDir]
+// Defaults: ~/.claude/projects/<this project>/  ->  docs/prompt-log/
+//
+// Personal details (email addresses, the local user folder) are redacted before writing.
+
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, resolve, basename, relative } from 'node:path';
+
+const root = resolve(import.meta.dirname, '..');
+const projectKey = root.replace(/[^A-Za-z0-9]/g, '-');
+const transcriptDir = process.argv[2] ?? join(homedir(), '.claude', 'projects', projectKey);
+const outDir = process.argv[3] ?? join(root, 'docs', 'prompt-log');
+
+if (!existsSync(transcriptDir)) {
+  console.error(`No transcripts at ${transcriptDir}`);
+  process.exit(1);
+}
+mkdirSync(outDir, { recursive: true });
+
+const home = homedir();
+const user = basename(home);
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const homeVariants = [home, home.replace(/\\/g, '/'), home.replace(/\\/g, '\\\\'), `/c/Users/${user}`, `C:/Users/${user}`];
+
+function redact(text) {
+  let t = text;
+  // Project-relative paths read better than absolute ones.
+  for (const r of [root, root.replace(/\\/g, '/'), root.replace(/\\/g, '\\\\')]) t = t.split(r + '\\').join('').split(r + '/').join('').split(r).join('.');
+  for (const h of homeVariants) t = t.split(h).join('~');
+  t = t.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (m) => (m.endsWith('@anthropic.com') ? m : '[email redacted]'));
+  t = t.replace(new RegExp(`\\b${escape(user)}\\b`, 'g'), '[user]');
+  return t;
+}
+
+/** Remove harness-injected blocks so only what the person typed remains. */
+function cleanPrompt(text) {
+  return text
+    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+    .replace(/<(command-[a-z-]+|local-command-[a-z-]+)>[\s\S]*?<\/\1>/g, '')
+    .trim();
+}
+
+function describeTool(name, input = {}) {
+  const what =
+    input.description ??
+    input.file_path ??
+    input.pattern ??
+    input.query ??
+    input.skill ??
+    input.url ??
+    input.task_id ??
+    (input.command ? input.command.split('\n')[0].slice(0, 100) : '');
+  return `${name}${what ? `: ${what}` : ''}`;
+}
+
+const files = readdirSync(transcriptDir).filter((f) => f.endsWith('.jsonl'));
+const index = [];
+
+for (const file of files) {
+  const lines = readFileSync(join(transcriptDir, file), 'utf8').trim().split('\n');
+  const turns = [];
+  let cur = null;
+  let firstTime = null;
+
+  const startTurn = (prompt, time, note) => {
+    cur = { prompt, time, note, reply: [], tools: [] };
+    turns.push(cur);
+  };
+
+  for (const line of lines) {
+    let o;
+    try {
+      o = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (o.isSidechain) continue;
+    const msg = o.message;
+    if (o.type === 'user' && msg?.role === 'user' && !o.isMeta) {
+      firstTime ??= o.timestamp;
+      if (typeof msg.content === 'string') {
+        const p = cleanPrompt(msg.content);
+        if (p) startTurn(p, o.timestamp);
+      } else if (Array.isArray(msg.content)) {
+        const text = msg.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+        const p = cleanPrompt(text);
+        if (p && !msg.content.some((c) => c.type === 'tool_result')) startTurn(p, o.timestamp);
+        // A message typed while rejecting a tool call is also a prompt.
+        for (const c of msg.content) {
+          if (c.type !== 'tool_result') continue;
+          const body = typeof c.content === 'string' ? c.content : (c.content ?? []).map((x) => x.text ?? '').join('\n');
+          const m = body.match(/the user said:\n([\s\S]*?)(\n\nNote: |$)/);
+          if (m) startTurn(m[1].trim(), o.timestamp, 'Sent while rejecting a tool call');
+        }
+      }
+    } else if (o.type === 'assistant' && cur && Array.isArray(msg?.content)) {
+      for (const c of msg.content) {
+        if (c.type === 'text' && c.text.trim()) cur.reply.push(c.text.trim());
+        if (c.type === 'tool_use') {
+          cur.tools.push(describeTool(c.name, c.input));
+          // Plans are written to a file rather than said in chat; include them so the response is complete.
+          const path = String(c.input?.file_path ?? '').replace(/\\/g, '/');
+          if (c.name === 'Write' && path.includes('.claude/plans/') && c.input.content) {
+            cur.reply.push(`**Plan written by the agent:**
+
+${c.input.content.trim()}`);
+          }
+        }
+      }
+    }
+  }
+
+  if (!turns.length) continue;
+  const id = basename(file, '.jsonl').slice(0, 8);
+  const date = (firstTime ?? '').slice(0, 10) || 'undated';
+  const name = `session-${date}-${id}.md`;
+
+  let md = `# Session ${date} (${id})\n\n`;
+  md += `Agent: Claude Code. ${turns.length} prompt${turns.length === 1 ? '' : 's'}. Generated by \`scripts/export-prompt-log.mjs\`; personal details are redacted, nothing else is edited.\n`;
+  turns.forEach((t, i) => {
+    md += `\n---\n\n## Prompt ${i + 1}\n\n`;
+    if (t.note) md += `_${t.note}._\n\n`;
+    md += t.prompt
+      .split('\n')
+      .map((l) => `> ${l}`)
+      .join('\n');
+    md += `\n\n### Agent response\n\n`;
+    md += t.reply.length ? t.reply.join('\n\n') : '_No text reply; the agent only used tools._';
+    if (t.tools.length) {
+      md += `\n\n<details>\n<summary>Actions taken (${t.tools.length})</summary>\n\n`;
+      md += t.tools.map((x) => `- ${x.replace(/\n/g, ' ')}`).join('\n');
+      md += `\n\n</details>`;
+    }
+    md += '\n';
+  });
+
+  writeFileSync(join(outDir, name), redact(md));
+  index.push({ name, date, prompts: turns.length });
+  console.log(`wrote ${relative(root, join(outDir, name))} (${turns.length} prompts)`);
+}
+
+index.sort((a, b) => a.name.localeCompare(b.name));
+let readme = `# Prompt log
+
+The Hub's Quest rules say a project built with AI coding agents must include the full prompt chain and the agent's response to each prompt. This folder is that record.
+
+- **Agent:** Claude Code (Anthropic)
+- **How it's made:** \`node scripts/export-prompt-log.mjs\` reads the Claude Code session transcripts and writes one file per session. Each prompt appears exactly as typed, followed by the agent's written reply and a list of the actions it took (files written, commands run).
+- **Redactions:** email addresses and the local user folder are replaced. Nothing else is changed.
+
+| Session | Prompts |
+|---|---|
+`;
+for (const s of index) readme += `| [${s.name.replace('.md', '')}](${s.name}) | ${s.prompts} |\n`;
+writeFileSync(join(outDir, 'README.md'), readme);
